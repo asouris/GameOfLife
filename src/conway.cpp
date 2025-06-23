@@ -4,6 +4,7 @@
 #include <fstream>
 #include <sstream>
 #include <vector>
+#include <random>
 
 #include <opencl_conway.h>
 
@@ -24,6 +25,8 @@ bool STATE = 0;                                         /*simulation state, 0 : 
 int STYLE = 0;                                          /*simulation style, 0 : 2D, 1 : 2D with lights, 2 : 3D simple*/
 std::vector <int> nextState(rows * cols);               /*holds next state on simulation*/
 Queue q = initConway(rows, cols, SIM_TYPE, nextState);  /*opencl command queue*/
+std::vector<float> lighted_cells_2d;
+int number_lighted_cells_2d = 2;
 
 
 /* GLFW CONFIG FUNCTIONS */
@@ -49,6 +52,11 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 
     if(key == GLFW_KEY_UP && action == GLFW_PRESS && MAX_FPS < 60) MAX_FPS += 1;
     if(key == GLFW_KEY_DOWN && action == GLFW_PRESS && MAX_FPS > 1) MAX_FPS -= 1;
+
+    if (key == GLFW_KEY_S && action == GLFW_PRESS){
+        std::cout << "s pressed\n";
+        STYLE = (STYLE + 1) % 2;
+    }
 }
 
 /** Resolves mouse button input when called
@@ -130,7 +138,7 @@ unsigned int load_shader(std::string path, bool shader_type){
     if (!success)
     {
         glGetShaderInfoLog(shader, 512, NULL, infoLog);
-        std::cout << "ERROR::SHADER::VERTEX::COMPILATION_FAILED\n" << infoLog << std::endl;
+        std::cout << "ERROR::SHADER::COMPILATION_FAILED\n" << infoLog << std::endl;
     }
 
     return shader;
@@ -221,16 +229,16 @@ std::vector<float> gridLines(){
     std::vector <float> vertices;
     int i = 0;
     while(i <= rows){
-        vertices.insert(vertices.end(), {   //colors
-            cell_gl_size*i - 0.8f, 0.8f,    0.0f, 1.0f, 1.0f, 1.0f,
-            cell_gl_size*i - 0.8f, -0.8f,   0.0f, 1.0f, 1.0f, 1.0f });
+        vertices.insert(vertices.end(), {           //colors
+            cell_gl_size*i - 0.8f, 0.8f, 0.0f,      0.8f, 0.8f, 0.8f,
+            cell_gl_size*i - 0.8f, -0.8f, 0.0f,     0.8f, 0.8f, 0.8f });
         i++;
     }
     i = 0;
     while(i <= cols){
         vertices.insert(vertices.end(), {           //colors
-            0.8f, cell_gl_size * i - 0.8f, 0.0f,    1.0f, 1.0f, 1.0f,
-            -0.8f, cell_gl_size*i - 0.8f, 0.0f,     1.0f, 1.0f, 1.0f});
+            0.8f, cell_gl_size * i - 0.8f, 0.0f,    0.8f, 0.8f, 0.8f,
+            -0.8f, cell_gl_size*i - 0.8f, 0.0f,     0.8f, 0.8f, 0.8f});
         i++;
     }
     return vertices;
@@ -251,6 +259,36 @@ std::vector <float> gridPoints(){
 }
 
 
+/* LIGHTED CELLS FUNCTIONS*/
+
+void fill_lighted_cells(std::vector<float> &points){
+    std::random_device rd; 
+    std::mt19937 gen(rd()); 
+    std::uniform_int_distribution<> distr(0, points.size()/3);
+    while(lighted_cells_2d.size()/3 < number_lighted_cells_2d){
+        int random_point = distr(gen);
+        lighted_cells_2d.insert(lighted_cells_2d.end(), {points[random_point*3], points[random_point*3 + 1], points[random_point*3 + 2]});
+    }
+}
+
+void randomize_lighted_cells(std::vector<float> &points){
+    lighted_cells_2d.clear();
+    fill_lighted_cells(points);
+}
+
+void resize_lighted_cells(int n, std::vector<float> &points){
+    if(n < number_lighted_cells_2d){
+        lighted_cells_2d.resize(n*3);
+        number_lighted_cells_2d = n;
+    }
+    else if(n > number_lighted_cells_2d){
+        number_lighted_cells_2d = n;
+        fill_lighted_cells(points);
+    }
+
+}
+
+
 /* MAIN */
 
 int main()
@@ -263,15 +301,21 @@ int main()
     unsigned int vertex_shader = load_shader("shaders/vshader.glsl", 0);
     unsigned int grid_shader = load_shader("shaders/v_grid.glsl", 0);
     unsigned int fragment_shader = load_shader("shaders/fshader.glsl", 1);
+    unsigned int vertex_light_shader = load_shader("shaders/v_lighted_shader.glsl", 0);
+    unsigned int fragment_light_shader = load_shader("shaders/f_lighted_shader.glsl", 1);
 
     /*Define shader programs*/
     unsigned int shader_program = create_shader_program(vertex_shader, fragment_shader);
     unsigned int grid_shader_program = create_shader_program(grid_shader, fragment_shader);
+    unsigned int lighted_shader_program = create_shader_program(vertex_light_shader, fragment_light_shader);
+    unsigned int lighted_grid_shader_program = create_shader_program(grid_shader, fragment_light_shader);
 
     /*Delete shaders once they are in a program*/
     glDeleteShader(vertex_shader);
     glDeleteShader(grid_shader);
     glDeleteShader(fragment_shader);
+    glDeleteShader(vertex_light_shader);
+    glDeleteShader(fragment_light_shader);
 
     /*Get vertices for the gridlines and positions of all squares*/
     std::vector<float> grid = gridLines(), points = gridPoints();
@@ -280,13 +324,13 @@ int main()
     /*Primitive for a white square*/
     float quadVertices[] = {
         // positions                        // colors
-        0.0f,  0.0f, 0.0f,                  1.0f, 1.0f, 1.0f,
-        cell_gl_size, cell_gl_size, 0.0f,   1.0f, 1.0f, 1.0f,
-        0.0f,  cell_gl_size, 0.0f,          1.0f, 1.0f, 1.0f,
+        0.0f,  0.0f, 0.0f,                  0.8f, 0.8f, 0.8f,
+        cell_gl_size, cell_gl_size, 0.0f,   0.8f, 0.8f, 0.8f,
+        0.0f,  cell_gl_size, 0.0f,          0.8f, 0.8f, 0.8f,
 
-        0.0f,  0.0f, 0.0f,                  1.0f, 1.0f, 1.0f,
-        cell_gl_size, 0.0f, 0.0f,           1.0f, 1.0f, 1.0f, 
-        cell_gl_size,  cell_gl_size, 0.0f,  1.0f, 1.0f, 1.0f	    		
+        0.0f,  0.0f, 0.0f,                  0.8f, 0.8f, 0.8f,
+        cell_gl_size, 0.0f, 0.0f,           0.8f, 0.8f, 0.8f,
+        cell_gl_size,  cell_gl_size, 0.0f,  0.8f, 0.8f, 0.8f	
     };
 
     /*Vertex Buffer Object and Vertex Array Object creation*/
@@ -313,15 +357,27 @@ int main()
     glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);	
     glVertexAttribDivisor(2, 1);  
+
+
+    randomize_lighted_cells(points);
     
     /*Rendering function*/
     auto render = [&](){
         /*background color*/
-        glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
         /*draw background grid*/
-        glUseProgram(grid_shader_program);
+        if(STYLE == 0)glUseProgram(grid_shader_program);
+        else if(STYLE == 1){
+            glUseProgram(lighted_grid_shader_program);
+            int lights_amount_location = glGetUniformLocation(lighted_grid_shader_program, "u_numPointLights");
+            int lights_array_location = glGetUniformLocation(lighted_grid_shader_program, "u_pointLights");
+            glUseProgram(lighted_grid_shader_program);
+
+            glUniform1i(lights_amount_location, number_lighted_cells_2d);
+            glUniform3fv(lights_array_location, lighted_cells_2d.size(), lighted_cells_2d.data());
+        }
         glBindVertexArray(VAOs[0]);
         glDrawArrays(GL_LINES, 0, grid.size()/3);
 
@@ -335,7 +391,16 @@ int main()
         int number_of_active_cells = update_with_step(instanceVBO, nextState, points, rows, cols);
 
         /*draw squares*/
-        glUseProgram(shader_program);
+        if(STYLE == 0) glUseProgram(shader_program);
+        else if(STYLE == 1){
+            int lights_amount_location = glGetUniformLocation(lighted_shader_program, "u_numPointLights");
+            int lights_array_location = glGetUniformLocation(lighted_shader_program, "u_pointLights");
+            glUseProgram(lighted_shader_program);
+
+            glUniform1i(lights_amount_location, number_lighted_cells_2d);
+            glUniform3fv(lights_array_location, lighted_cells_2d.size(), lighted_cells_2d.data());
+
+        }
         glBindVertexArray(VAOs[1]);
         glDrawArraysInstanced(GL_TRIANGLES, 0, 6, number_of_active_cells);
         glBindVertexArray(0);
