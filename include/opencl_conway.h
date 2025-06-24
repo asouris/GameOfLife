@@ -89,24 +89,28 @@ public:
 /** Initializes a Command Queue with everything needed to iterate the Conway's Game
  * @param N amount of rows in the world
  * @param M amount of columns in the world
+ * @param D amount of planes in the world
  * @param type type of kernel implementation to be used
  * @param nextState vector that will hold the next state in the game
  * @return an initialized Queue
  */
-Queue initConway(int N, int M, int type, std::vector<int> &nextState);
+Queue initConway(int N, int M, int type, std::vector<int> &nextState, int D);
 
 /** Runs an iteration of the simulation
  * @param N amount of rows in the world
  * @param M amount of columns in the world
+ * @param D amount of planes in the world
  * @param q OpenCL command queue that holds the kernel and buffer references
  * @param nextState vector that will hold the next state in the game
+ * @param flag_3d parameter for the kernel, if true treats the world as 3D
  */
-void calculateStep(int N, int M, Queue q, std::vector<int> &nextState);
+void calculateStep(int N, int M, Queue q, std::vector<int> &nextState, int D, int flag_3d);
 
 /** Formats and prints a world state to console
  * @param world vector holding the world state
  * @param N amount of rows in the world
  * @param M amount of columns in the world
+ * @param D amount of planes in the world
  */
-void printWorld(std::vector < int > &world, int N, int M);
+void printWorld(std::vector < int > &world, int N, int M, int D = 1);
 

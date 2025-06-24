@@ -119,7 +119,7 @@ void initWorld(std::vector<int> &world, const int N, const int M){
 /**
  * Prints a world to stdout using squares
  */
-void printWorld(std::vector < int > &world, int N, int M){
+void printWorld(std::vector < int > &world, int N, int M, int D){
     int j = 0;
     for(int i = 0; i < N*M; i++){
         if(world[i]) std::cout << "■";
@@ -150,18 +150,20 @@ void report(std::string rep){
     std::cout << rep << std::endl;
 }
 
-Queue initConway(int N, int M, int type, std::vector<int> &nextState){
+Queue initConway(int N, int M, int type, std::vector<int> &nextState, int D){
     Queue q;
     initWorld(nextState, N, M);
 
     q.addBuffer(nextState, CL_MEM_READ_ONLY);
     q.addBuffer(nextState, CL_MEM_WRITE_ONLY);
 
-    std::string source = type == 0 ? "kernel/CalcStep.cl" : (type == 1 ? "kernel/CalcStep2D.cl" : "kernel/CalcStepGroups.cl");
+    std::string source;
+    if(D == 1) source = type == 0 ? "kernel/CalcStep.cl" : (type == 1 ? "kernel/CalcStep2D.cl" : "kernel/CalcStepGroups.cl");
+    else source = "kernel/CalcStep3D.cl";
     q.setKernel(source, "calcStep");
 
     if(type == 0){
-        q.globalSize = cl::NDRange(N * M);
+        q.globalSize = cl::NDRange(N * M * D);
         q.localSize = cl::NDRange(block_size);
     }
     else{
@@ -173,9 +175,9 @@ Queue initConway(int N, int M, int type, std::vector<int> &nextState){
 }
 
 
-void calculateStep(int N, int M, Queue q, std::vector<int> &nextState){
+void calculateStep(int N, int M, Queue q, std::vector<int> &nextState, int D, int flag_3d){
     q.updateBuffer(nextState, 0);
-    cl::Event event = q(q.globalSize, q.localSize, N, M);
+    cl::Event event = q(q.globalSize, q.localSize, N, M, D, flag_3d);
     event.wait();
     q.readBuffer(nextState, 1);
 }

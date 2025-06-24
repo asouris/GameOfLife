@@ -35,6 +35,7 @@ target_link_libraries(conway ${OPENGL_LIBRARIES} glfw OpenCL opencl_conway)
 file(COPY src/opencl/CalcStep.cl DESTINATION ${PROJECT_SOURCE_DIR}/bin/kernel/)
 file(COPY src/opencl/CalcStep2D.cl DESTINATION ${PROJECT_SOURCE_DIR}/bin/kernel/)
 file(COPY src/opencl/CalcStepGroups.cl DESTINATION ${PROJECT_SOURCE_DIR}/bin/kernel/)
+file(COPY src/opencl/CalcStep3D.cl DESTINATION ${PROJECT_SOURCE_DIR}/bin/kernel/)
 
 add_library(
         utils STATIC

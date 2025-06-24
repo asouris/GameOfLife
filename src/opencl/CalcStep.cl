@@ -18,7 +18,7 @@ int worldIdx(int i, int j, const int N, const int M){
     @param N size of world's x axis
     @param M size of world's y axis
 */
-__kernel void calcStep(global int *current, global int *next, int N, int M){
+__kernel void calcStep(global int *current, global int *next, int N, int M, int D){
 
     // global position
     int gindex = get_global_id(0);
