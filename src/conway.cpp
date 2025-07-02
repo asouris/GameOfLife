@@ -1,18 +1,25 @@
+#include "imgui.h"
+#include "backends/imgui_impl_glfw.h"
+#include "backends/imgui_impl_opengl3.h"
+
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+
 #include <iostream>
 #include <fstream>
 #include <sstream>
 #include <vector>
 #include <random>
+#include <math.h>
 
 #include <opencl_conway.h>
 
 /*GLOBAL CONSTANTS*/
+#define PI 3.14159265
 const int WIDTH = 1000, HEIGHT = 1000;
 const int sim_width = 800, sim_height = 800;
 const int cell_size = 10;
@@ -25,13 +32,45 @@ const int SIM_TYPE = 0;
 
 /*GLOBAL VARIABLES*/
 int planes = rows;
-float MAX_FPS = 10.f;                                   /*variable fps for rendering*/
+int MAX_FPS = 10;                                   /*variable fps for rendering*/
 bool STATE = 0;                                         /*simulation state, 0 : pause, 1 : running*/
 int STYLE = 0;                                          /*simulation style, 0 : 2D, 1 : 2D with lights, 2 : 3D simple*/
 std::vector <int> next_state_2d(rows * cols);           /*holds next state on simulation*/
 std::vector <int> next_state_3d(rows * cols * planes);  /*holds next state on 3d simulation*/
 //Queue q = initConway(rows, cols, SIM_TYPE, next_state_2d, planes);      /*opencl command queue*/
 Queue q_3d = initConway(rows, cols, SIM_TYPE, next_state_3d, planes);   /*opencl command queue for 3d simulation*/
+
+
+struct Camera {
+
+    glm::vec3 position = glm::vec3(3.0f, 0.0f, 0.0f);
+    glm::vec3 focus =    glm::vec3(0.0f, 0.0f, 0.0f);
+    double distance = 3;
+    double theta = 90;
+    double phi = 0;
+
+    int keys[4] = {0, 0, 0, 0};
+
+    void update(){
+        if (keys[0]) phi-=1;
+        if (keys[1]) phi+=1;
+        if (keys[2]) theta-=1;
+        if (keys[3]) theta+=1;
+
+        if (theta > 90) theta = 90;
+        else if(theta < 0) theta = 0.0001;
+
+        position.x = distance * sin(glm::radians(theta)) * sin(glm::radians(phi));
+        position.y = distance * cos(glm::radians(theta));
+        position.z = distance * sin(glm::radians(theta)) * cos(glm::radians(phi));
+    }
+
+    glm::mat4 get_camera_view(){
+        return glm::lookAt(position, focus, glm::vec3(0.0f, 1.0f, 0.0f));
+    }
+
+} camera;
+
 
 //Queue *current_queue = &q;
 std::vector <int> *current_next_state = &next_state_2d;
@@ -44,6 +83,34 @@ int worldIdx(int i, int j, int k, const int N, const int M, const int D){
     i = (i + N) % N;
     j = (j + M) % M;
 	return k * N * M + i * M + j;
+}
+
+void add_n_random_glider(int n){
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> distr(0, next_state_3d.size());
+    for (int z=0; z< n; z++){
+        int random_point = distr(gen);
+
+        int k = random_point / (rows * cols);  
+        int i = (random_point % (rows * cols)) / cols;
+        int j = (random_point % (rows * cols)) % cols;
+
+        next_state_3d[random_point] = 1;
+        next_state_3d[worldIdx(i+1, j, k, rows, cols, planes)] = 1;
+        next_state_3d[worldIdx(i+1, j, k+1, rows, cols, planes)] = 1;
+        next_state_3d[worldIdx(i, j, k+1, rows, cols, planes)] = 1;
+
+        next_state_3d[worldIdx(i-1, j-1, k, rows, cols, planes)] = 1;
+        next_state_3d[worldIdx(i-1, j-1, k+1, rows, cols, planes)] = 1;
+
+        next_state_3d[worldIdx(i+2, j-1, k, rows, cols, planes)] = 1;
+        next_state_3d[worldIdx(i+2, j-1, k+1, rows, cols, planes)] = 1;
+
+        next_state_3d[worldIdx(i, j-1, k+2, rows, cols, planes)] = 1;
+        next_state_3d[worldIdx(i+1, j-1, k+2, rows, cols, planes)] = 1;
+
+    }
 }
 
 void add_n_alive_cells(int n){
@@ -115,26 +182,36 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
     if(key == GLFW_KEY_UP && action == GLFW_PRESS && MAX_FPS < 60) MAX_FPS += 1;
     if(key == GLFW_KEY_DOWN && action == GLFW_PRESS && MAX_FPS > 1) MAX_FPS -= 1;
 
-    if (key == GLFW_KEY_S && action == GLFW_PRESS){
-        // if(STYLE + 1 == 2){
-        //     current_queue = &q_3d;
-        //     current_next_state = &next_state_3d;
-        //     planes = rows;
-        // }
-        // else{
-        //     current_queue = &q;
-        //     current_next_state = &next_state_2d;
-        //     planes = 1;
-        // }
-        STYLE = (STYLE + 1) % 3;
+    if (key == GLFW_KEY_LEFT && action == GLFW_PRESS){
+        STYLE = (STYLE + 1) % 2;
+    }
+    if (key == GLFW_KEY_RIGHT && action == GLFW_PRESS){
+        STYLE = (STYLE + 1) % 2;
     }
 
     if(key == GLFW_KEY_M && action == GLFW_PRESS){
-        add_n_alive_cells(10);
+        add_n_random_glider(5);
     }
 
     if(key == GLFW_KEY_K && action == GLFW_PRESS){
         kill_world();
+    }
+
+    if (key == GLFW_KEY_A){
+        if(action == GLFW_PRESS) camera.keys[0] = 1;
+        else if(action == GLFW_RELEASE) camera.keys[0] = 0;
+    }
+    if (key == GLFW_KEY_D){
+        if(action == GLFW_PRESS) camera.keys[1] = 1;
+        else if(action == GLFW_RELEASE) camera.keys[1] = 0;
+    }
+    if (key == GLFW_KEY_S){
+        if(action == GLFW_PRESS) camera.keys[2] = 1;
+        else if(action == GLFW_RELEASE) camera.keys[2] = 0;
+    }
+    if (key == GLFW_KEY_W){
+        if(action == GLFW_PRESS) camera.keys[3] = 1;
+        else if(action == GLFW_RELEASE) camera.keys[3] = 0;
     }
 }
 
@@ -266,8 +343,6 @@ int update_with_step(unsigned int &positions, std::vector<int> &result, std::vec
             number_of_active_cells+=1;
         }
     }
-
-    std::cout << new_positions.size() << "\n";
 
 
     glBindBuffer(GL_ARRAY_BUFFER, positions);
@@ -429,6 +504,31 @@ int main()
     /*Window Configuration*/
     GLFWwindow* window = init_glfw_window(WIDTH, HEIGHT, "Conway's Game of Life");
 
+    /*ImGui setup*/
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO(); (void)io;
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+
+    ImGui::StyleColorsDark();
+
+    // Setup scaling
+    ImGuiStyle& style = ImGui::GetStyle();
+    //style.ScaleAllSizes(main_scale);        // Bake a fixed style scale. (until we have a solution for dynamic style scaling, changing this requires resetting Style + calling this again)
+    //style.FontScaleDpi = main_scale;        // Set initial font scale. (using io.ConfigDpiScaleFonts=true makes this unnecessary. We leave both here for documentation purpose)
+
+    // Setup Platform/Renderer backends
+    ImGui_ImplGlfw_InitForOpenGL(window, true);
+    ImGui_ImplOpenGL3_Init("#version 130");
+    bool show_demo_window = true;
+    bool show_another_window = false;
+    ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
+    
+
+    /*OpenGL config*/
+    glEnable(GL_DEPTH_TEST);
+
     /*Load and create shader variables*/
     unsigned int vertex_shader = load_shader("shaders/vshader.glsl", 0);
     unsigned int grid_shader = load_shader("shaders/v_grid.glsl", 0);
@@ -542,14 +642,14 @@ int main()
     };
 
     float big_cube[] = {
-        -0.8f, -0.8f, -0.8f,                           0.8f, 0.8f, 0.8f,   // 0
-        -0.8f, -0.8f, 0.8f,                   0.8f, 0.8f, 0.8f,   // 1
-        -0.8f, 0.8f, -0.8f,                   0.8f, 0.8f, 0.8f,   // 2
-        -0.8f, 0.8f, 0.8f,          0.8f, 0.8f, 0.8f,   // 3
-        0.8f, 0.8f, 0.8f,                   0.8f, 0.8f, 0.8f,   // 4
-        0.8f, 0.8f, -0.8f,          0.8f, 0.8f, 0.8f,   // 5
-        0.8f, -0.8f, 0.8f,          0.8f, 0.8f, 0.8f,   // 6
-        0.8f, -0.8f, -0.8f,  0.8f, 0.8f, 0.8f    // 7
+        -0.8f, -0.8f, -0.8f,                           1.0f, 1.0f, 1.0f,   // 0
+        -0.8f, -0.8f, 0.8f,                   1.0f, 1.0f, 1.0f,   // 1
+        -0.8f, 0.8f, -0.8f,                   1.0f, 1.0f, 1.0f,   // 2
+        -0.8f, 0.8f, 0.8f,          1.0f, 1.0f, 1.0f,   // 3
+        0.8f, 0.8f, 0.8f,                   1.0f, 1.0f, 1.0f,   // 4
+        0.8f, 0.8f, -0.8f,          1.0f, 1.0f, 1.0f,   // 5
+        0.8f, -0.8f, 0.8f,          1.0f, 1.0f, 1.0f,   // 6
+        0.8f, -0.8f, -0.8f,  1.0f, 1.0f, 1.0f    // 7
     };
 
     int big_cube_indice[] = {
@@ -597,14 +697,10 @@ int main()
 
     randomize_lighted_cells(points);
 
-    glm::mat4 view_3d          = glm::mat4(1.0f);
     glm::mat4 projection_3d    = glm::mat4(1.0f);
     glm::mat4 view             = glm::mat4(1.0f);
     glm::mat4 projection       = glm::mat4(1.0f);
 
-    view_3d  = glm::lookAt(glm::vec3(3.0f, 0.0f, 5.0f), 
-                           glm::vec3(0.0f, 0.0f, 0.0f), 
-                           glm::vec3(0.0f, 1.0f, 0.0f));
     projection_3d = glm::perspective(glm::radians(45.0f), (float)WIDTH / (float)HEIGHT, 0.1f, 100.0f);
         
     
@@ -612,14 +708,17 @@ int main()
     auto render = [&](){
         /*background color*/
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        camera.update();
+
 
         unsigned int viewLoc  = glGetUniformLocation(grid_shader_program, "view");
         unsigned int projLoc  = glGetUniformLocation(grid_shader_program, "projection");
         glUseProgram(grid_shader_program);
         /*draw background grid*/
-        if(STYLE == 2){
-            glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view_3d));
+        if(STYLE == 1){
+            glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(camera.get_camera_view()));
             glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection_3d));
             glBindVertexArray(VAOs[2]);
             glDrawElements(GL_LINES, 24, GL_UNSIGNED_INT, 0);
@@ -637,7 +736,7 @@ int main()
         /*if not in pause*/
         if(STATE){
             /*Calculating conway step*/
-            calculateStep(rows, cols, q_3d, next_state_3d, planes, STYLE == 2);
+            calculateStep(rows, cols, q_3d, next_state_3d, planes, STYLE == 1);
         }
         
         /*updates the positions buffer and gets the number of active cells*/
@@ -648,8 +747,8 @@ int main()
         projLoc  = glGetUniformLocation(shader_program_3d, "projection");
 
         glUseProgram(shader_program_3d);
-        if(STYLE == 2){
-            glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view_3d));
+        if(STYLE == 1){
+            glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(camera.get_camera_view()));
             glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection_3d));
         }
         else{
@@ -659,7 +758,8 @@ int main()
         
         glBindVertexArray(VAOs[1]);
         glDrawArraysInstanced(GL_TRIANGLES, 0, 30, number_of_active_cells);
-        //}
+        
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
         glBindVertexArray(0);
         glfwSwapBuffers(window);
@@ -680,8 +780,55 @@ int main()
 
         glfwPollEvents();
 
+        // if (glfwGetWindowAttrib(window, GLFW_ICONIFIED) != 0)
+        // {
+        //     ImGui_ImplGlfw_Sleep(10);
+        //     continue;
+        // }
+
+        //Start the Dear ImGui frame
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+        
+        // 2. Show a simple window that we create ourselves. We use a Begin/End pair to create a named window.
+        {
+            static int counter = 0;
+
+            ImGui::Begin("Controller");                          // Create a window called "Hello, world!" and append into it.
+
+            ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
+            ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
+            ImGui::Checkbox("Another Window", &show_another_window);
+
+            ImGui::SliderInt("Velocity", &MAX_FPS, 0, 60);            
+
+            if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
+                counter++;
+            ImGui::SameLine();
+            ImGui::Text("counter = %d", counter);
+
+            ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+            ImGui::End();
+        }
+
+        //3. Show another simple window.
+        if (show_another_window)
+        {
+            ImGui::Begin("Another Window", &show_another_window);   // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
+            ImGui::Text("Hello from another window!");
+            if (ImGui::Button("Close Me"))
+                show_another_window = false;
+            ImGui::End();
+        }
+
+        //Rendering
+        ImGui::Render();
+        int display_w, display_h;
+        glfwGetFramebufferSize(window, &display_w, &display_h);
+
         /*rendering*/
-        float FRAME_TIME = 1.f / MAX_FPS;
+        float FRAME_TIME = 1.f / (float)MAX_FPS;
         if (accumulated_time >= FRAME_TIME)
         {
             float update_dt = current_time - last_update_time;

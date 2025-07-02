@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
+include(FetchContent)
 
 project(tarea3 LANGUAGES CXX C)
 
@@ -23,9 +24,6 @@ add_library(
 )
 target_include_directories(opencl_conway PUBLIC ${PROJECT_SOURCE_DIR}/include)
 
-target_include_directories(conway PUBLIC ${PROJECT_SOURCE_DIR}/include)
-target_link_libraries(conway ${OPENGL_LIBRARIES} glfw OpenCL opencl_conway)
-
 
 # add_executable(opencl src/opencl/opencl_conway.cpp)
 # target_include_directories(opencl PUBLIC ${PROJECT_SOURCE_DIR}/include)
@@ -44,5 +42,25 @@ add_library(
 target_include_directories(utils PUBLIC ${PROJECT_SOURCE_DIR}/include)
 add_executable(seq src/sequential-conway.cpp)
 target_link_libraries(seq utils)
+
+FetchContent_Declare(imgui_external
+	URL https://github.com/ocornut/imgui/archive/refs/tags/v1.92.0.tar.gz
+	EXCLUDE_FROM_ALL
+)
+FetchContent_MakeAvailable(imgui_external)
+
+add_library(imgui
+	${imgui_external_SOURCE_DIR}/imgui.cpp
+	${imgui_external_SOURCE_DIR}/imgui_draw.cpp
+	${imgui_external_SOURCE_DIR}/imgui_tables.cpp
+	${imgui_external_SOURCE_DIR}/imgui_widgets.cpp
+	${imgui_external_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
+        ${imgui_external_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
+
+)
+target_include_directories(imgui PUBLIC ${imgui_external_SOURCE_DIR})
+
+target_include_directories(conway PUBLIC ${PROJECT_SOURCE_DIR}/include)
+target_link_libraries(conway ${OPENGL_LIBRARIES} glfw OpenCL opencl_conway imgui)
 
 

@@ -22,7 +22,7 @@ int worldIdx(int i, int j, int k, const int N, const int M, const int D){
     @param M size of world's y axis
     @param D size of world's z axis
 */
-__kernel void calcStep(global int *current, global int *next, int N, int M, int D){
+__kernel void calcStep(global int *current, global int *next, int N, int M, int D, int flag_3d){
 
     // global position
     int gindex = get_global_id(0);
@@ -35,14 +35,18 @@ __kernel void calcStep(global int *current, global int *next, int N, int M, int 
     //get number of neighbours
     int neighbours = current[worldIdx(i - 1, j - 1, k, N, M, D)] + current[worldIdx(i - 1, j, k, N, M, D)] + current[worldIdx(i - 1, j + 1, k, N, M, D)] + // same k
                     current[worldIdx(i, j - 1, k, N, M, D)] + current[worldIdx(i, j + 1, k, N, M, D)] +
-                    current[worldIdx(i + 1, j - 1, k, N, M, D)] + current[worldIdx(i + 1, j, k, N, M, D)] + current[worldIdx(i + 1, j + 1, k, N, M, D)] +
-                    current[worldIdx(i - 1, j - 1, k+1, N, M, D)] + current[worldIdx(i - 1, j, k+1, N, M, D)] + current[worldIdx(i - 1, j + 1, k+1, N, M, D)] + // next k
-                    current[worldIdx(i, j - 1, k+1, N, M, D)] + current[worldIdx(i, j + 1, k+1, N, M, D)] + current[worldIdx(i, j, k+1, N, M, D)] +
-                    current[worldIdx(i + 1, j - 1, k+1, N, M, D)] + current[worldIdx(i + 1, j, k+1, N, M, D)] + current[worldIdx(i + 1, j + 1, k+1, N, M, D)] +
-                    current[worldIdx(i - 1, j - 1, k-1, N, M, D)] + current[worldIdx(i - 1, j, k-1, N, M, D)] + current[worldIdx(i - 1, j + 1, k-1, N, M, D)] + // last k
-                    current[worldIdx(i, j - 1, k-1, N, M, D)] + current[worldIdx(i, j + 1, k-1, N, M, D)] + current[worldIdx(i, j, k-1, N, M, D)] +
-                    current[worldIdx(i + 1, j - 1, k-1, N, M, D)] + current[worldIdx(i + 1, j, k-1, N, M, D)] + current[worldIdx(i + 1, j + 1, k-1, N, M, D)];
-
-    //set next step 
-    next[gindex] = current[gindex] && (5 <= neighbours && neighbours <= 6) || !current[gindex] && neighbours == 4;
+                    current[worldIdx(i + 1, j - 1, k, N, M, D)] + current[worldIdx(i + 1, j, k, N, M, D)] + current[worldIdx(i + 1, j + 1, k, N, M, D)];
+    if(flag_3d){
+        neighbours +=   current[worldIdx(i - 1, j - 1, k+1, N, M, D)] + current[worldIdx(i - 1, j, k+1, N, M, D)] + current[worldIdx(i - 1, j + 1, k+1, N, M, D)] + // next k
+                        current[worldIdx(i, j - 1, k+1, N, M, D)] + current[worldIdx(i, j + 1, k+1, N, M, D)] + current[worldIdx(i, j, k+1, N, M, D)] +
+                        current[worldIdx(i + 1, j - 1, k+1, N, M, D)] + current[worldIdx(i + 1, j, k+1, N, M, D)] + current[worldIdx(i + 1, j + 1, k+1, N, M, D)] +
+                        current[worldIdx(i - 1, j - 1, k-1, N, M, D)] + current[worldIdx(i - 1, j, k-1, N, M, D)] + current[worldIdx(i - 1, j + 1, k-1, N, M, D)] + // last k
+                        current[worldIdx(i, j - 1, k-1, N, M, D)] + current[worldIdx(i, j + 1, k-1, N, M, D)] + current[worldIdx(i, j, k-1, N, M, D)] +
+                        current[worldIdx(i + 1, j - 1, k-1, N, M, D)] + current[worldIdx(i + 1, j, k-1, N, M, D)] + current[worldIdx(i + 1, j + 1, k-1, N, M, D)];
+        next[gindex] = current[gindex] && (4 <= neighbours && neighbours <= 5) || !current[gindex] && neighbours == 5;
+    }
+    else{
+        //set next step 
+        next[gindex] = neighbours == 3 || (neighbours == 2 && current[gindex]);        
+    }
 }
