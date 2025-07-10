@@ -23,7 +23,7 @@
 const int WIDTH = 1000, HEIGHT = 1000;
 const int sim_width = 800, sim_height = 800;
 const int cell_size = 10;
-const int rows = sim_height/cell_size, cols = sim_width/cell_size;
+const int rows = sim_height/cell_size, cols = sim_width/cell_size, planes = rows;;
 
 const float window_fraction = (float)sim_width / (float)WIDTH, usable_gl_space = 2.0f * window_fraction;
 const float cell_gl_size = usable_gl_space / (float)rows;
@@ -31,14 +31,50 @@ const float cell_gl_size = usable_gl_space / (float)rows;
 const int SIM_TYPE = 0;
 
 /*GLOBAL VARIABLES*/
-int planes = rows;
 int MAX_FPS = 10;                                   /*variable fps for rendering*/
 bool STATE = 0;                                         /*simulation state, 0 : pause, 1 : running*/
 int STYLE = 0;                                          /*simulation style, 0 : 2D, 1 : 2D with lights, 2 : 3D simple*/
-std::vector <int> next_state_2d(rows * cols);           /*holds next state on simulation*/
 std::vector <int> next_state_3d(rows * cols * planes);  /*holds next state on 3d simulation*/
-//Queue q = initConway(rows, cols, SIM_TYPE, next_state_2d, planes);      /*opencl command queue*/
-Queue q_3d = initConway(rows, cols, SIM_TYPE, next_state_3d, planes);   /*opencl command queue for 3d simulation*/
+Queue q_3d = initConway(rows, cols, planes, SIM_TYPE, next_state_3d);   /*opencl command queue for 3d simulation*/
+float color[4] = {1, 1, 1, 1};
+float lightIntesity = 1;
+int coloring = 0;
+int lightCells = 0;
+float light_cells_intensity = 1;
+
+
+std::vector<float> lighted_cells_2d;
+int internal_light_cells = 0;
+
+// struct Controller{
+
+//     /* simulation state variables */
+//     int current_fps = 10;   /* simulation fps, used as simulation velocity */
+//     bool running = 0;       /* if True, the simulation is running, otherwise is paused */
+//     bool style_3d = 0;      /* if True a 3d style is used, its 2d*/
+
+//     /* openCL variables */
+//     std::vector <int> next_state; /* holds the next state in simulation, updated by OpenCL */
+//     Queue q_3d;
+
+//     /* openGL uniforms */
+//     float cell_color[4] = {1, 1, 1, 1};
+//     float sun_intensity = 1;
+
+//     std::vector<float> lighted_cells_positions;
+//     int number_of_light_cells = 0;
+//     int internal_number_of_light_cells = 0;
+//     float light_cells_intensity = 1;
+
+//     int coloring_style = 0;
+    
+
+//     Controller(int rows, int cols, int planes){
+
+//         next_state.resize(rows * cols, planes);
+//         q_3d = initConway(rows, cols, planes, 0, next_state);
+//     }
+// };
 
 
 struct Camera {
@@ -72,11 +108,44 @@ struct Camera {
 } camera;
 
 
-//Queue *current_queue = &q;
-std::vector <int> *current_next_state = &next_state_2d;
+// struct Window{
 
-std::vector<float> lighted_cells_2d;
-int number_lighted_cells_2d = 2;
+//     GLFWwindow* window;
+
+//     Window(int WIDTH, int HEIGHT){
+//         init_glfw_window(WIDTH, HEIGHT, "Conway's Game of Life");
+//     }
+
+
+//     void init_glfw_window(int width, int height, const char *title){
+//         glfwInit();
+//         glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+//         glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+//         glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+        
+//         window = glfwCreateWindow(width, height, title, NULL, NULL);
+//         if (window == NULL)
+//         {
+//             std::cout << "Failed to create GLFW window" << std::endl;
+//             glfwTerminate();
+//             exit(0);
+//         }
+
+//         glfwMakeContextCurrent(window);
+
+//         if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
+//         {
+//             std::cout << "Failed to initialize GLAD" << std::endl;
+//             exit(0);
+//         }  
+
+//         glfwSetKeyCallback(window, key_callback);
+//         glfwSetMouseButtonCallback(window, mouse_button_callback);
+//         glViewport(0, 0, width, height);
+//     }
+
+// };
+
 
 int worldIdx(int i, int j, int k, const int N, const int M, const int D){
     k = (k + D) % D;
@@ -160,12 +229,6 @@ void kill_world(){
 
 /* GLFW CONFIG FUNCTIONS */
 
-/** Resizes viewport when called */
-void framebuffer_size_callback(GLFWwindow* window, int width, int height)
-{
-    glViewport(0, 0, width, height);
-} 
-
 /** Resolves key input when called
  *  Space will change the state of the simulation between pause and running
  *  Up and Down will change the fps of the simulation
@@ -220,7 +283,7 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
  */
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 {
-    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS){
+    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS && !STYLE){
         double xpos, ypos;
         glfwGetCursorPos(window, &xpos, &ypos);
 
@@ -472,7 +535,7 @@ void fill_lighted_cells(std::vector<float> &points){
     std::random_device rd; 
     std::mt19937 gen(rd()); 
     std::uniform_int_distribution<> distr(0, points.size()/3);
-    while(lighted_cells_2d.size()/3 < number_lighted_cells_2d){
+    while(lighted_cells_2d.size()/3 < internal_light_cells){
         int random_point = distr(gen);
         lighted_cells_2d.insert(lighted_cells_2d.end(), {points[random_point*3], points[random_point*3 + 1], points[random_point*3 + 2]});
     }
@@ -483,18 +546,59 @@ void randomize_lighted_cells(std::vector<float> &points){
     fill_lighted_cells(points);
 }
 
-void resize_lighted_cells(int n, std::vector<float> &points){
-    if(n < number_lighted_cells_2d){
-        lighted_cells_2d.resize(n*3);
-        number_lighted_cells_2d = n;
-    }
-    else if(n > number_lighted_cells_2d){
-        number_lighted_cells_2d = n;
+void update_light_cells(std::vector<float> &points){
+    if(lightCells > internal_light_cells){
+        internal_light_cells = lightCells;
         fill_lighted_cells(points);
     }
-
+    else if(lightCells < internal_light_cells){
+        lighted_cells_2d.resize(lightCells * 3);
+        internal_light_cells = lightCells;
+    }
 }
 
+
+
+/* IMGUI LOOP */
+
+void renderImgui(GLFWwindow* window, ImGuiIO io){
+    //Start the Dear ImGui frame
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+    
+    // 2. Show a simple window that we create ourselves. We use a Begin/End pair to create a named window.
+    {
+        static int counter = 0;
+
+        ImGui::Begin("Controller");                         
+
+        ImGui::SliderInt("Velocity", &MAX_FPS, 0, 60);  
+        
+        ImGui::ColorEdit4("Color", color);    
+        
+        ImGui::SliderFloat("Light Intensity", &lightIntesity, 0, 1);
+
+        const char* items[] = { "2D", "3D" };
+        ImGui::Combo("Dimensions", &STYLE, items, IM_ARRAYSIZE(items));
+
+        const char* items2[] = { "Phong", "Normal" };
+        ImGui::Combo("Coloring", &coloring, items2, IM_ARRAYSIZE(items2));
+
+        ImGui::SliderInt("Light Cells", &lightCells, 0, 20);
+        ImGui::SliderFloat("Brightness", &light_cells_intensity, 0, 1);
+
+
+        ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+        ImGui::End();
+    }
+
+
+    //Rendering
+    ImGui::Render();
+    int display_w, display_h;
+    glfwGetFramebufferSize(window, &display_w, &display_h);
+}
 
 /* MAIN */
 
@@ -530,27 +634,18 @@ int main()
     glEnable(GL_DEPTH_TEST);
 
     /*Load and create shader variables*/
-    unsigned int vertex_shader = load_shader("shaders/vshader.glsl", 0);
-    unsigned int grid_shader = load_shader("shaders/v_grid.glsl", 0);
-    unsigned int fragment_shader = load_shader("shaders/fshader.glsl", 1);
-    unsigned int vertex_light_shader = load_shader("shaders/v_lighted_shader.glsl", 0);
-    unsigned int fragment_light_shader = load_shader("shaders/f_lighted_shader.glsl", 1);
-    unsigned int vertex_3d_shader = load_shader("shaders/v_3d_shader.glsl", 0);
-    unsigned int fragment_3d_shader = load_shader("shaders/f_3d_shader.glsl", 1);
+    unsigned int grid_vertex = load_shader("shaders/grid_vertex.glsl", 0);
+    unsigned int grid_fragment = load_shader("shaders/grid_fragment.glsl", 1);
+    unsigned int vertex_3d_shader = load_shader("shaders/3d_vertex.glsl", 0);
+    unsigned int fragment_3d_shader = load_shader("shaders/3d_fragment.glsl", 1);
 
     /*Define shader programs*/
-    unsigned int shader_program = create_shader_program(vertex_shader, fragment_shader);
-    unsigned int grid_shader_program = create_shader_program(grid_shader, fragment_shader);
-    unsigned int lighted_shader_program = create_shader_program(vertex_light_shader, fragment_light_shader);
-    unsigned int lighted_grid_shader_program = create_shader_program(grid_shader, fragment_light_shader);
+    unsigned int grid_shader_program = create_shader_program(grid_vertex, grid_fragment);
     unsigned int shader_program_3d = create_shader_program(vertex_3d_shader, fragment_3d_shader);
 
     /*Delete shaders once they are in a program*/
-    glDeleteShader(vertex_shader);
-    glDeleteShader(grid_shader);
-    glDeleteShader(fragment_shader);
-    glDeleteShader(vertex_light_shader);
-    glDeleteShader(fragment_light_shader);
+    glDeleteShader(grid_vertex);
+    glDeleteShader(grid_fragment);
     glDeleteShader(vertex_3d_shader);
     glDeleteShader(fragment_3d_shader);
 
@@ -695,7 +790,7 @@ int main()
 
     bind_load_indices_buffer(VBOs, VAOs, EBO, sizeof(big_cube), big_cube, sizeof(big_cube_indice), big_cube_indice, 2);
 
-    randomize_lighted_cells(points);
+    //randomize_lighted_cells(points);
 
     glm::mat4 projection_3d    = glm::mat4(1.0f);
     glm::mat4 view             = glm::mat4(1.0f);
@@ -711,6 +806,7 @@ int main()
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         camera.update();
+        update_light_cells(points_3d);
 
 
         unsigned int viewLoc  = glGetUniformLocation(grid_shader_program, "view");
@@ -745,6 +841,13 @@ int main()
         //std::cout << number_of_active_cells << "\n";
         viewLoc  = glGetUniformLocation(shader_program_3d, "view");
         projLoc  = glGetUniformLocation(shader_program_3d, "projection");
+        unsigned int color_loc = glGetUniformLocation(shader_program_3d, "uniColor");
+        unsigned int intensity_loc = glGetUniformLocation(shader_program_3d, "light_intensity");
+        unsigned int coloring_loc = glGetUniformLocation(shader_program_3d, "coloring");
+        unsigned int light_cells_Loc = glGetUniformLocation(shader_program_3d, "light_cells");
+        unsigned int light_cells_intensity_Loc = glGetUniformLocation(shader_program_3d, "light_cells_intensity");
+        unsigned int number_light_cells_Loc = glGetUniformLocation(shader_program_3d, "number_light_cells");
+
 
         glUseProgram(shader_program_3d);
         if(STYLE == 1){
@@ -755,10 +858,24 @@ int main()
             glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
             glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
         }
-        
+
+        glUniform3fv(color_loc, 1, color);
+        glUniform1f(intensity_loc, lightIntesity);
+        glUniform1i(coloring_loc, coloring);
+
+        for(int i = 0; i < lightCells; i++){
+            std::cout << lighted_cells_2d[i*3] << " " << lighted_cells_2d[i*3 +1] << " " << lighted_cells_2d[i*3 + 1] << "\n" ;
+        }
+        std::cout << "number: " << lightCells << "\n";
+        glUniform1fv(light_cells_Loc, lightCells*3, lighted_cells_2d.data());
+        glUniform1f(light_cells_intensity_Loc, light_cells_intensity);
+        glUniform1i(number_light_cells_Loc, lightCells);
+
+
         glBindVertexArray(VAOs[1]);
         glDrawArraysInstanced(GL_TRIANGLES, 0, 30, number_of_active_cells);
         
+        renderImgui(window, io);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
         glBindVertexArray(0);
@@ -780,52 +897,7 @@ int main()
 
         glfwPollEvents();
 
-        // if (glfwGetWindowAttrib(window, GLFW_ICONIFIED) != 0)
-        // {
-        //     ImGui_ImplGlfw_Sleep(10);
-        //     continue;
-        // }
-
-        //Start the Dear ImGui frame
-        ImGui_ImplOpenGL3_NewFrame();
-        ImGui_ImplGlfw_NewFrame();
-        ImGui::NewFrame();
         
-        // 2. Show a simple window that we create ourselves. We use a Begin/End pair to create a named window.
-        {
-            static int counter = 0;
-
-            ImGui::Begin("Controller");                          // Create a window called "Hello, world!" and append into it.
-
-            ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
-            ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
-            ImGui::Checkbox("Another Window", &show_another_window);
-
-            ImGui::SliderInt("Velocity", &MAX_FPS, 0, 60);            
-
-            if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
-                counter++;
-            ImGui::SameLine();
-            ImGui::Text("counter = %d", counter);
-
-            ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
-            ImGui::End();
-        }
-
-        //3. Show another simple window.
-        if (show_another_window)
-        {
-            ImGui::Begin("Another Window", &show_another_window);   // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
-            ImGui::Text("Hello from another window!");
-            if (ImGui::Button("Close Me"))
-                show_another_window = false;
-            ImGui::End();
-        }
-
-        //Rendering
-        ImGui::Render();
-        int display_w, display_h;
-        glfwGetFramebufferSize(window, &display_w, &display_h);
 
         /*rendering*/
         float FRAME_TIME = 1.f / (float)MAX_FPS;
@@ -843,7 +915,6 @@ int main()
     /*if the window was closed, frees memory*/
     glDeleteVertexArrays(4, VAOs);
     glDeleteBuffers(4, VBOs);
-    glDeleteProgram(shader_program);
     glDeleteProgram(grid_shader_program);
 
     glfwTerminate();

@@ -3,6 +3,7 @@
 #define CL_HPP_TARGET_OPENCL_VERSION 120
 #define CL_HPP_MINIMUM_OPENCL_VERSION 120
 #define CL_HPP_ENABLE_EXCEPTIONS
+
 #include <CL/opencl.hpp>
 
 /** Implements a OpenCL command queue
@@ -94,7 +95,7 @@ public:
  * @param nextState vector that will hold the next state in the game
  * @return an initialized Queue
  */
-Queue initConway(int N, int M, int type, std::vector<int> &nextState, int D);
+Queue initConway(int N, int M, int D, int type, std::vector<int> &nextState);
 
 /** Runs an iteration of the simulation
  * @param N amount of rows in the world

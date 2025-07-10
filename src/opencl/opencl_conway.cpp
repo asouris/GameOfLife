@@ -150,7 +150,7 @@ void report(std::string rep){
     std::cout << rep << std::endl;
 }
 
-Queue initConway(int N, int M, int type, std::vector<int> &nextState, int D){
+Queue initConway(int N, int M, int D, int type, std::vector<int> &nextState){
     Queue q;
     initWorld(nextState, N, M);
 
