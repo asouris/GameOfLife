@@ -35,6 +35,13 @@ file(COPY src/opencl/CalcStep2D.cl DESTINATION ${PROJECT_SOURCE_DIR}/bin/kernel/
 file(COPY src/opencl/CalcStepGroups.cl DESTINATION ${PROJECT_SOURCE_DIR}/bin/kernel/)
 file(COPY src/opencl/CalcStep3D.cl DESTINATION ${PROJECT_SOURCE_DIR}/bin/kernel/)
 
+#copy shaders to bin
+file(COPY src/shaders/3d_fragment.glsl DESTINATION ${PROJECT_SOURCE_DIR}/bin/shaders/)
+file(COPY src/shaders/3d_vertex.glsl DESTINATION ${PROJECT_SOURCE_DIR}/bin/shaders/)
+file(COPY src/shaders/grid_fragment.glsl DESTINATION ${PROJECT_SOURCE_DIR}/bin/shaders/)
+file(COPY src/shaders/grid_vertex.glsl DESTINATION ${PROJECT_SOURCE_DIR}/bin/shaders/)
+
+
 add_library(
         utils STATIC
         src/utils.cpp
