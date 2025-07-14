@@ -67,9 +67,6 @@ add_library(
 target_include_directories(utils PUBLIC ${PROJECT_SOURCE_DIR}/include)
 target_link_libraries(utils imgui)
 
-add_executable(seq src/sequential-conway.cpp)
-target_link_libraries(seq utils)
-
 target_include_directories(conway PUBLIC ${PROJECT_SOURCE_DIR}/include)
 target_link_libraries(conway ${OPENGL_LIBRARIES} utils glfw OpenCL opencl_conway)
 
