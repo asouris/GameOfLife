@@ -41,9 +41,10 @@ struct Controller{
     float cell_gl_size;
 
     /* simulation state variables */
-    int current_fps = 10;   /* simulation fps, used as simulation velocity */
-    bool running = 0;       /* if True, the simulation is running, otherwise is paused */
-    int style_3d = 0;       /* if True a 3d style is used, its 2d*/
+    int current_fps = 10;           /* simulation fps, used as simulation velocity */
+    bool running = 0;               /* if True, the simulation is running, otherwise is paused */
+    int style_3d = 0;               /* if True a 3d style is used, its 2d*/
+    int parallel_simualtion = 1;   /* if True the next step of the simulations is calculated with OpenCL, other wise with a sequential function*/
 
     /* openCL variables */
     std::vector <int> next_state; /* holds the next state in simulation, updated by OpenCL */
@@ -85,6 +86,8 @@ struct Controller{
     void update_light_cells(std::vector<float> &points);
 
     void renderImgui(GLFWwindow* window, ImGuiIO &io);
+
+    void calculateStepSecuentially();
 };
 
 class Window {

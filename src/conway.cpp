@@ -201,7 +201,8 @@ int main()
         /*if not in pause*/
         if(controller.running){
             /*Calculating conway step*/
-            calculateStep(controller.rows, controller.cols, controller.planes, controller.q_3d, controller.next_state, controller.style_3d == 1);
+            if(controller.parallel_simualtion) calculateStep(controller.rows, controller.cols, controller.planes, controller.q_3d, controller.next_state, controller.style_3d == 1);
+            else controller.calculateStepSecuentially();
         }
         
         /*updates the positions buffer and gets the number of active cells*/

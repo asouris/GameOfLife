@@ -285,6 +285,9 @@ void Controller::renderImgui(GLFWwindow* window, ImGuiIO &io){
         const char* items2[] = { "Phong", "Normal" };
         ImGui::Combo("Coloring", &coloring_style, items2, IM_ARRAYSIZE(items2));
 
+        const char* items3[] = {"Sequential", "Parallel"};
+        ImGui::Combo("Type of simulation", &parallel_simualtion, items3, IM_ARRAYSIZE(items3));
+
         ImGui::SliderInt("Light Cells", &number_of_light_cells, 0, 20);
         ImGui::SliderFloat("Brightness", &light_cells_intensity, 0, 1);
 
@@ -298,6 +301,35 @@ void Controller::renderImgui(GLFWwindow* window, ImGuiIO &io){
     ImGui::Render();
     int display_w, display_h;
     glfwGetFramebufferSize(window, &display_w, &display_h);
+}
+
+void Controller::calculateStepSecuentially(){
+
+    std::vector<int> temp(next_state.size());
+    
+    for(int gindex = 0; gindex < next_state.size(); gindex++){
+        int k = gindex / (rows * cols);  
+        int i = (gindex % (rows * cols)) / cols;
+        int j = (gindex % (rows * cols)) % cols;
+        int neighbours = next_state[worldIdx(i - 1, j - 1, k, rows, cols, planes)] + next_state[worldIdx(i - 1, j, k, rows, cols, planes)] + next_state[worldIdx(i - 1, j + 1, k, rows, cols, planes)] + // same k
+                        next_state[worldIdx(i, j - 1, k, rows, cols, planes)] + next_state[worldIdx(i, j + 1, k, rows, cols, planes)] +
+                        next_state[worldIdx(i + 1, j - 1, k, rows, cols, planes)] + next_state[worldIdx(i + 1, j, k, rows, cols, planes)] + next_state[worldIdx(i + 1, j + 1, k, rows, cols, planes)];
+
+        if(style_3d){
+            neighbours +=   next_state[worldIdx(i - 1, j - 1, k+1, rows, cols, planes)] + next_state[worldIdx(i - 1, j, k+1, rows, cols, planes)] + next_state[worldIdx(i - 1, j + 1, k+1, rows, cols, planes)] + // next k
+                            next_state[worldIdx(i, j - 1, k+1, rows, cols, planes)] + next_state[worldIdx(i, j + 1, k+1, rows, cols, planes)] + next_state[worldIdx(i, j, k+1, rows, cols, planes)] +
+                            next_state[worldIdx(i + 1, j - 1, k+1, rows, cols, planes)] + next_state[worldIdx(i + 1, j, k+1, rows, cols, planes)] + next_state[worldIdx(i + 1, j + 1, k+1, rows, cols, planes)] +
+                            next_state[worldIdx(i - 1, j - 1, k-1, rows, cols, planes)] + next_state[worldIdx(i - 1, j, k-1, rows, cols, planes)] + next_state[worldIdx(i - 1, j + 1, k-1, rows, cols, planes)] + // last k
+                            next_state[worldIdx(i, j - 1, k-1, rows, cols, planes)] + next_state[worldIdx(i, j + 1, k-1, rows, cols, planes)] + next_state[worldIdx(i, j, k-1, rows, cols, planes)] +
+                            next_state[worldIdx(i + 1, j - 1, k-1, rows, cols, planes)] + next_state[worldIdx(i + 1, j, k-1, rows, cols, planes)] + next_state[worldIdx(i + 1, j + 1, k-1, rows, cols, planes)];
+            temp[gindex] = next_state[gindex] && (4 <= neighbours && neighbours <= 5) || !next_state[gindex] && neighbours == 5;
+        }
+        else{
+            temp[gindex] = neighbours == 3 || (neighbours == 2 && next_state[gindex]);        
+        }
+    }
+
+    std::copy(temp.begin(), temp.end(), next_state.begin());   
 }
 
 
