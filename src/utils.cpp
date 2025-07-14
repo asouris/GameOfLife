@@ -328,6 +328,7 @@ Window::Window(Controller &c){
 
     glfwSetKeyCallback(m_glfwWindow, WindowKeyCallback);
     glfwSetMouseButtonCallback(m_glfwWindow, WindowMouseButtonCallback);
+    glfwSetScrollCallback(m_glfwWindow, WindowScrollCallback);
 
     /*ImGui setup*/
     IMGUI_CHECKVERSION();
@@ -437,4 +438,9 @@ void Window::internal_mouse_button_callback(int button, int action, int mods)
             controller->next_state[cell_i + cell_j * controller->cols] = !controller->next_state[cell_i + cell_j * controller->cols];
         }
     }
+}
+
+void Window::internal_scroll_callback(double xoffset, double yoffset){
+
+    controller->camera.distance += yoffset;
 }

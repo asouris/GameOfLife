@@ -21,6 +21,7 @@ These settings are managed by the Imgui window "Controller" and listed in the sa
 - `M` generates 5 gliders on random positions.
 - `K` empties the whole world, kills every cell.
 - `WASD` rotates the camera around when in 3D.
+- not a key but with the mouse scroll, the zoom can be adjusted.
 
 ## How to build
 The following commands should build the project and generate a folder named `bin` which holds the binary `conway`.

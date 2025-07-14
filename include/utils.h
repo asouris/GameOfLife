@@ -192,6 +192,9 @@ public:
     /** Manages mouse button input */
     auto internal_mouse_button_callback(int button, int action, int mods)-> void;
 
+    /** Manages mouse scroll input */
+    auto internal_scroll_callback(double xoffset, double yoffset)->void;
+
 
 private:
     Controller *controller;     /* a controller*/
@@ -212,6 +215,13 @@ private:
         
             Window *window = static_cast<Window*>(glfwGetWindowUserPointer(win));
             window->internal_mouse_button_callback(button, action, mods);
+    }
+
+    /** Real mouse scroll callback */
+    inline static auto WindowScrollCallback(GLFWwindow* win, double xoffset, double yoffset)  -> void {
+        
+            Window *window = static_cast<Window*>(glfwGetWindowUserPointer(win));
+            window->internal_scroll_callback(xoffset, yoffset);
     }
     
 };
