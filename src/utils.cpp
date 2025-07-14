@@ -2,12 +2,9 @@
 
 #include <random>
 #include <iostream>
+#include <fstream>
+#include <sstream>
 #include "utils.h"
-
-
-
-
-
 
 int worldIdx(int i, int j, int k, const int N, const int M, const int D){
     k = (k + D) % D;
@@ -16,31 +13,13 @@ int worldIdx(int i, int j, int k, const int N, const int M, const int D){
 	return k * N * M + i * M + j;
 }
 
+Controller::Controller(int width, int height){
+    rows = width * SIM_SCALE / CELL_SIZE, cols = height * SIM_SCALE / CELL_SIZE, planes = rows;
+    WIDTH = width, HEIGHT = height;
 
-
-
-/** Resolves mouse button input when called
- *  Clicking inside the simulation will change the state of the clicked square
- */
-// void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
-// {
-//     if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS && !STYLE){
-//         double xpos, ypos;
-//         glfwGetCursorPos(window, &xpos, &ypos);
-
-//         double min_simulation = (WIDTH - sim_height) / 2, max_simulation = WIDTH - min_simulation;
-//         if(min_simulation <= xpos and xpos < max_simulation and min_simulation <= ypos and ypos < max_simulation){
-//             int cell_i = (ypos - min_simulation) / cell_size, cell_j = (xpos - min_simulation) / cell_size;
-//             next_state_3d[cell_i + cell_j * cols] = !next_state_3d[cell_i + cell_j * cols];
-//         }
-//     }
-// }
-
-
-Controller::Controller(int r, int c, int p){
-    rows = r, cols = c, planes = p;
-    next_state.resize(rows * cols, planes);
+    next_state.resize(rows * cols * planes);
     q_3d = initConway(rows, cols, planes, 0, next_state);
+    cell_gl_size = 2.0f * SIM_SCALE / (float)rows;
 }
 
 void Controller::add_n_random_glider(int n){
@@ -75,6 +54,254 @@ void Controller::kill_world(){
     std::fill(next_state.begin(), next_state.end(), 0);
 }
 
+/* SHADERS FUNCTIONS */
+
+/** Loads a shader from a path.
+ * @param path path to shader
+ * @return shader identifier
+*/
+unsigned int Controller::load_shader(std::string path, bool shader_type){
+    /*reading shader*/
+    std::ifstream shaderInput;
+    shaderInput.open(path);
+    std::stringstream strStream;
+    strStream << shaderInput.rdbuf() << "\n\0"; //read the file
+    const std::string& tmp = strStream.str();   
+    const char *shader_source = tmp.c_str();
+
+    shaderInput.close();
+
+    /*loading shader into opengl*/
+    int success;
+    char infoLog[512];
+
+    unsigned int shader;
+    if(shader_type) shader = glCreateShader(GL_FRAGMENT_SHADER);
+    else            shader = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(shader, 1, &shader_source, NULL);
+    glCompileShader(shader);
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
+    if (!success)
+    {
+        glGetShaderInfoLog(shader, 512, NULL, infoLog);
+        std::cout << "ERROR::SHADER::COMPILATION_FAILED\n" << infoLog << std::endl;
+    }
+
+    return shader;
+}
+
+/** Creates shader program from shaders, if said so, it deletes the used shaders afterwards.
+ * @param vertex vertex shader already loaded
+ * @param fragment fragment shader already loaded
+ * @param flag if true deletes the shaders after using them.
+ * @return shader program identifier
+ */
+unsigned int Controller::create_shader_program(unsigned int vertex, unsigned int fragment){
+    int success;
+    char infoLog[512];
+    unsigned int program = glCreateProgram();
+    glAttachShader(program, vertex);
+    glAttachShader(program, fragment);
+    glLinkProgram(program);
+    // check for linking errors
+    glGetProgramiv(program, GL_LINK_STATUS, &success);
+    if (!success) {
+        glGetProgramInfoLog(program, 512, NULL, infoLog);
+        std::cout << "ERROR::SHADER::PROGRAM::LINKING_FAILED\n" << infoLog << std::endl;
+    }
+
+    return program;
+}
+
+/* BUFFER FUNCTIONS */
+
+/** Gets the number of active cells on the result array and updates the buffer
+ * @param positions buffer to be updated with the positions of active cells
+ * @param result    array with the result from a Conway step 
+ * @param coords    array with coordinates for every cube
+ * @param N         amount of rows
+ * @param M         amount of columns
+ * @return          number of active cells after step
+ */
+int Controller::update_with_step(unsigned int &positions, std::vector<int> &result, std::vector<float> coords, int N, int M, int D){
+    int number_of_active_cells = 0;
+
+    std::vector <float> new_positions;
+    for(int i = 0; i < N*M*D; i++){
+        if(result[i]){
+            new_positions.insert(new_positions.end(), {coords[i*3], coords[i*3 + 1], coords[i*3 + 2]});
+            number_of_active_cells+=1;
+        }
+    }
+
+
+    glBindBuffer(GL_ARRAY_BUFFER, positions);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(float)*new_positions.size(), new_positions.data(), GL_DYNAMIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    // glEnableVertexAttribArray(2);
+    // glBindBuffer(GL_ARRAY_BUFFER, positions);
+    // glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);	
+    // glVertexAttribDivisor(2, 1); 
+
+    return number_of_active_cells;
+
+}
+
+/** Binds and loads a static buffer of floats
+ * @param VBOS array of vertex buffer objects
+ * @param VAOs array of vertex array objects
+ * @param size size of data array in bytes
+ * @param data data array 
+ * @param index index of the buffer
+*/
+void Controller::bind_load_static_buffer(unsigned int *VBOs, unsigned int *VAOs, int size, float *data, int index){
+    glBindVertexArray(VAOs[index]);
+    glBindBuffer(GL_ARRAY_BUFFER, VBOs[index]);
+    glBufferData(GL_ARRAY_BUFFER, size, data, GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3* sizeof(float)));
+    glEnableVertexAttribArray(1);
+    glBindBuffer(GL_ARRAY_BUFFER, 0); 
+}
+
+void Controller::bind_load_normals_buffer(unsigned int *VBOs, unsigned int *VAOs, int size, float *data, int index){
+    glBindVertexArray(VAOs[index]);
+    glBindBuffer(GL_ARRAY_BUFFER, VBOs[index]);
+    glBufferData(GL_ARRAY_BUFFER, size, data, GL_STATIC_DRAW);
+
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3* sizeof(float)));
+    glEnableVertexAttribArray(1);
+
+    glBindBuffer(GL_ARRAY_BUFFER, 0); 
+}
+
+void Controller::bind_load_indices_buffer(unsigned int *VBOs, unsigned int *VAOs, unsigned int EBO, int size, float *data, int indices_size, int *indices_data, int index){
+    glBindVertexArray(VAOs[index]);
+    glBindBuffer(GL_ARRAY_BUFFER, VBOs[index]);
+    glBufferData(GL_ARRAY_BUFFER, size, data, GL_STATIC_DRAW);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices_size, indices_data, GL_STATIC_DRAW);
+
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3* sizeof(float)));
+    glEnableVertexAttribArray(1);
+    glBindBuffer(GL_ARRAY_BUFFER, 0); 
+}
+
+/* VERTICES FUNCTIONS */
+
+/** Calculates vertices for the grid
+ * @return float vector with vertices, 6 values per vertex
+ */
+std::vector<float> Controller::gridLines(){
+    std::vector <float> vertices;
+    int i = 0;
+    while(i <= rows){
+        vertices.insert(vertices.end(), {           //colors
+            cell_gl_size*i - 0.8f, 0.8f, 0.0f,      0.8f, 0.8f, 0.8f,
+            cell_gl_size*i - 0.8f, -0.8f, 0.0f,     0.8f, 0.8f, 0.8f });
+        i++;
+    }
+    i = 0;
+    while(i <= cols){
+        vertices.insert(vertices.end(), {           //colors
+            0.8f, cell_gl_size * i - 0.8f, 0.0f,    0.8f, 0.8f, 0.8f,
+            -0.8f, cell_gl_size*i - 0.8f, 0.0f,     0.8f, 0.8f, 0.8f});
+        i++;
+    }
+    return vertices;
+}
+
+/** Calculates positions for each cube in openGL space [-1, 1]
+ * @return float vector with positions, 3 values per position
+*/
+std::vector<float> Controller::grid_points_3d(){
+    std::vector<float> vertices;
+    for(int k = planes-1; k >= 0; k--){
+        for(int i = 0 ; i < rows; i++){
+            for(int j = cols-1; j >= 0; j--){
+                vertices.insert(vertices.end(), {cell_gl_size*(float)i - 0.8f, cell_gl_size*(float)j - 0.8f, cell_gl_size*(float)k - 0.8f});
+            }
+        }
+    }
+
+    return vertices;
+}
+
+/* LIGHTED CELLS FUNCTIONS*/
+
+void Controller::fill_lighted_cells(std::vector<float> &points){
+    std::random_device rd; 
+    std::mt19937 gen(rd()); 
+    std::uniform_int_distribution<> distr(0, points.size()/3);
+    while(lighted_cells_positions.size()/3 < internal_number_of_light_cells){
+        int random_point = distr(gen);
+        lighted_cells_positions.insert(lighted_cells_positions.end(), {points[random_point*3], points[random_point*3 + 1], points[random_point*3 + 2]});
+    }
+}
+
+
+void Controller::update_light_cells(std::vector<float> &points){
+    if(number_of_light_cells > internal_number_of_light_cells){
+        internal_number_of_light_cells = number_of_light_cells;
+        fill_lighted_cells(points);
+    }
+    else if(number_of_light_cells < internal_number_of_light_cells){
+        lighted_cells_positions.resize(number_of_light_cells * 3);
+        internal_number_of_light_cells = number_of_light_cells;
+    }
+}
+
+/* IMGUI LOOP */
+
+void Controller::renderImgui(GLFWwindow* window, ImGuiIO &io){
+    //Start the Dear ImGui frame
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+    
+    // 2. Show a simple window that we create ourselves. We use a Begin/End pair to create a named window.
+    {
+        static int counter = 0;
+
+        ImGui::Begin("Controller");                         
+
+        ImGui::SliderInt("Velocity", &current_fps, 0, 60);  
+        
+        ImGui::ColorEdit4("Color", cell_color);    
+        
+        ImGui::SliderFloat("Light Intensity", &sun_intensity, 0, 1);
+
+        const char* items[] = { "2D", "3D" };
+        ImGui::Combo("Dimensions", &style_3d, items, IM_ARRAYSIZE(items));
+
+        const char* items2[] = { "Phong", "Normal" };
+        ImGui::Combo("Coloring", &coloring_style, items2, IM_ARRAYSIZE(items2));
+
+        ImGui::SliderInt("Light Cells", &number_of_light_cells, 0, 20);
+        ImGui::SliderFloat("Brightness", &light_cells_intensity, 0, 1);
+
+
+        ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+        ImGui::End();
+    }
+
+
+    //Rendering
+    ImGui::Render();
+    int display_w, display_h;
+    glfwGetFramebufferSize(window, &display_w, &display_h);
+}
+
+
+
 
 
 void Camera::update(){
@@ -101,21 +328,42 @@ glm::mat4 Camera::get_camera_view(){
 
 
 
-Window::Window(int WIDTH, int HEIGHT, Controller &c){
+Window::Window(Controller &c){
+
+    WIDTH = c.WIDTH, HEIGHT = c.HEIGHT;
+
     init_glfw_window(WIDTH, HEIGHT, "Conway's Game of Life");
+
     controller = &c;
-    //window = glfwWindow;
-    //glfwInit();
-
-    //window = glfwCreateWindow(WIDTH, HEIGHT, "Conway's Game of Life", NULL, NULL);        
-
-    // needed for glfwGetUserPointer to work
     glfwSetWindowUserPointer(m_glfwWindow, this);
 
-    // set our static functions as callbacks
     glfwSetKeyCallback(m_glfwWindow, WindowKeyCallback);
+    glfwSetMouseButtonCallback(m_glfwWindow, WindowMouseButtonCallback);
 
+    /*ImGui setup*/
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    io = &ImGui::GetIO();
+    (void)io;
+    (*io).ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
+    (*io).ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+
+    ImGui::StyleColorsDark();
+
+    // Setup scaling
+    ImGuiStyle& style = ImGui::GetStyle();
+    
+    // Setup Platform/Renderer backends
+    ImGui_ImplGlfw_InitForOpenGL(m_glfwWindow, true);
+    ImGui_ImplOpenGL3_Init("#version 130");
+    bool show_demo_window = true;
+    bool show_another_window = false;
+    ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
+    
+
+    /*OpenGL config*/
     glViewport(0, 0, WIDTH, HEIGHT);
+    glEnable(GL_DEPTH_TEST);
 }
 
 
@@ -140,9 +388,6 @@ void Window::init_glfw_window(int width, int height, const char *title){
         std::cout << "Failed to initialize GLAD" << std::endl;
         exit(0);
     }  
-
-    //glfwSetKeyCallback(window, key_callback);
-    //glfwSetMouseButtonCallback(window, mouse_button_callback);
 }
 
     /* GLFW CONFIG FUNCTIONS */
@@ -179,54 +424,38 @@ void Window::internal_key_callback(int key, int action){
     }
 
     if (key == GLFW_KEY_A){
-        if(action == GLFW_PRESS) controller->camera->keys[0] = 1;
-        else if(action == GLFW_RELEASE) controller->camera->keys[0] = 0;
+        if(action == GLFW_PRESS) controller->camera.keys[0] = 1;
+        else if(action == GLFW_RELEASE) controller->camera.keys[0] = 0;
     }
     if (key == GLFW_KEY_D){
-        if(action == GLFW_PRESS) controller->camera->keys[1] = 1;
-        else if(action == GLFW_RELEASE) controller->camera->keys[1] = 0;
+        if(action == GLFW_PRESS) controller->camera.keys[1] = 1;
+        else if(action == GLFW_RELEASE) controller->camera.keys[1] = 0;
     }
     if (key == GLFW_KEY_S){
-        if(action == GLFW_PRESS) controller->camera->keys[2] = 1;
-        else if(action == GLFW_RELEASE) controller->camera->keys[2] = 0;
+        if(action == GLFW_PRESS) controller->camera.keys[2] = 1;
+        else if(action == GLFW_RELEASE) controller->camera.keys[2] = 0;
     }
     if (key == GLFW_KEY_W){
-        if(action == GLFW_PRESS) controller->camera->keys[3] = 1;
-        else if(action == GLFW_RELEASE) controller->camera->keys[3] = 0;
+        if(action == GLFW_PRESS) controller->camera.keys[3] = 1;
+        else if(action == GLFW_RELEASE) controller->camera.keys[3] = 0;
     }
 }
 
+/** Resolves mouse button input when called
+ *  Clicking inside the simulation will change the state of the clicked square
+ */
+void Window::internal_mouse_button_callback(int button, int action, int mods)
+{
+    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS && !controller->style_3d){
+        double xpos, ypos;
+        glfwGetCursorPos(m_glfwWindow, &xpos, &ypos);
 
+        double min_simulation = (WIDTH - (WIDTH * controller->SIM_SCALE)) / 2, max_simulation = WIDTH - min_simulation;
+        if(min_simulation <= xpos and xpos < max_simulation and min_simulation <= ypos and ypos < max_simulation){
 
-// Window makeWindow(int WIDTH, int HEIGHT, const char *title, Controller c){
-//     glfwInit();
-//     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-//     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-//     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    
-//     GLFWwindow* window = glfwCreateWindow(WIDTH, HEIGHT, title, NULL, NULL);
-//     if (window == NULL)
-//     {
-//         std::cout << "Failed to create GLFW window" << std::endl;
-//         glfwTerminate();
-//         exit(0);
-//     }
+            int cell_i = (ypos - min_simulation) / controller->CELL_SIZE, cell_j = (xpos - min_simulation) / controller->CELL_SIZE;
 
-//     glfwMakeContextCurrent(window);
-
-//     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
-//     {
-//         std::cout << "Failed to initialize GLAD" << std::endl;
-//         exit(0);
-//     }  
-
-//     Window program_window = Window(window, WIDTH, HEIGHT, c);
-//     glfwSetWindowUserPointer(window, &program_window);
-
-//     glfwSetKeyCallback(window,program_window.key_callback);
-//     glfwSetMouseButtonCallback(window, mouse_button_callback);
-//     glViewport(0, 0, WIDTH, HEIGHT);
-
-
-//     return program_window;
-// }
+            controller->next_state[cell_i + cell_j * controller->cols] = !controller->next_state[cell_i + cell_j * controller->cols];
+        }
+    }
+}

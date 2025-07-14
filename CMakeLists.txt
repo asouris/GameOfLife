@@ -41,15 +41,6 @@ file(COPY src/shaders/3d_vertex.glsl DESTINATION ${PROJECT_SOURCE_DIR}/bin/shade
 file(COPY src/shaders/grid_fragment.glsl DESTINATION ${PROJECT_SOURCE_DIR}/bin/shaders/)
 file(COPY src/shaders/grid_vertex.glsl DESTINATION ${PROJECT_SOURCE_DIR}/bin/shaders/)
 
-
-add_library(
-        utils STATIC
-        src/utils.cpp
-)
-target_include_directories(utils PUBLIC ${PROJECT_SOURCE_DIR}/include)
-add_executable(seq src/sequential-conway.cpp)
-target_link_libraries(seq utils)
-
 FetchContent_Declare(imgui_external
 	URL https://github.com/ocornut/imgui/archive/refs/tags/v1.92.0.tar.gz
 	EXCLUDE_FROM_ALL
@@ -67,7 +58,19 @@ add_library(imgui
 )
 target_include_directories(imgui PUBLIC ${imgui_external_SOURCE_DIR})
 
+
+
+add_library(
+        utils STATIC
+        src/utils.cpp
+)
+target_include_directories(utils PUBLIC ${PROJECT_SOURCE_DIR}/include)
+target_link_libraries(utils imgui)
+
+add_executable(seq src/sequential-conway.cpp)
+target_link_libraries(seq utils)
+
 target_include_directories(conway PUBLIC ${PROJECT_SOURCE_DIR}/include)
-target_link_libraries(conway ${OPENGL_LIBRARIES} glfw OpenCL opencl_conway imgui)
+target_link_libraries(conway ${OPENGL_LIBRARIES} utils glfw OpenCL opencl_conway)
 
 

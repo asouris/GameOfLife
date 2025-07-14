@@ -105,7 +105,7 @@ Queue initConway(int N, int M, int D, int type, std::vector<int> &nextState);
  * @param nextState vector that will hold the next state in the game
  * @param flag_3d parameter for the kernel, if true treats the world as 3D
  */
-void calculateStep(int N, int M, Queue q, std::vector<int> &nextState, int D, int flag_3d);
+void calculateStep(int N, int M, int D, Queue q, std::vector<int> &nextState, int flag_3d);
 
 /** Formats and prints a world state to console
  * @param world vector holding the world state

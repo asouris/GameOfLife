@@ -175,7 +175,7 @@ Queue initConway(int N, int M, int D, int type, std::vector<int> &nextState){
 }
 
 
-void calculateStep(int N, int M, Queue q, std::vector<int> &nextState, int D, int flag_3d){
+void calculateStep(int N, int M, int D, Queue q, std::vector<int> &nextState, int flag_3d){
     q.updateBuffer(nextState, 0);
     cl::Event event = q(q.globalSize, q.localSize, N, M, D, flag_3d);
     event.wait();
