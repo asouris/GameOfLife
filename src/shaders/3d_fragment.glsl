@@ -11,7 +11,7 @@ uniform bool coloring;                      /*type of coloring*/
 uniform bool style_3d;                      /*3d or 2d style*/
 
 const int max_light_cells = 20;             /*maximum amount of lighted cells*/
-uniform float light_cells[max_light_cells]; /*array of lights*/
+uniform float light_cells[3*max_light_cells];/*array of lights*/
 uniform float light_cells_intensity;        /*lighted cells intensity*/
 uniform int number_light_cells;             /*current number of lighted cells*/
 
