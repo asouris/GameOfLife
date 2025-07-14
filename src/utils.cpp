@@ -238,7 +238,8 @@ void Controller::renderImgui(GLFWwindow* window, ImGuiIO &io){
     
     /*Contents of the window*/
     {
-        ImGui::Begin("Controller");                         
+        ImGui::Begin("Controller");    
+        ImGui::SetWindowPos(ImVec2(WIDTH*0.6, 20));                     
 
         ImGui::SliderInt("Velocity", &current_fps, 0, 60);  
         
@@ -346,8 +347,6 @@ Window::Window(Controller &c){
     // Setup Platform/Renderer backends
     ImGui_ImplGlfw_InitForOpenGL(m_glfwWindow, true);
     ImGui_ImplOpenGL3_Init("#version 130");
-    bool show_demo_window = true;
-    bool show_another_window = false;
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
     
 
