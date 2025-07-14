@@ -1,16 +1,5 @@
 #include "utils.h"
 
-// #include "imgui.h"
-// #include "backends/imgui_impl_glfw.h"
-// #include "backends/imgui_impl_opengl3.h"
-
-// #include <glad/glad.h>
-// #include <GLFW/glfw3.h>
-// #include <glm/glm.hpp>
-// #include <glm/gtc/matrix_transform.hpp>
-// #include <glm/gtc/type_ptr.hpp>
-
-
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -96,6 +85,7 @@ int main()
         0.0, controller.cell_gl_size, 0.0,                                          -1.0, 0.0, 0.0  // 2
     };
 
+    /* wireframe cube to show 3d boundaries*/
     float big_cube[] = {
         -0.8f, -0.8f, -0.8f,    1.0f, 1.0f, 1.0f,   // 0
         -0.8f, -0.8f, 0.8f,     1.0f, 1.0f, 1.0f,   // 1
@@ -147,16 +137,14 @@ int main()
     glBindBuffer(GL_ARRAY_BUFFER, 0);	
     glVertexAttribDivisor(2, 1);  
 
+    /*binding big cube indices*/
     controller.bind_load_indices_buffer(VBOs, VAOs, EBO, sizeof(big_cube), big_cube, sizeof(big_cube_indice), big_cube_indice, 2);
 
-    //randomize_lighted_cells(points);
-
+    /*initial view matrices*/
     glm::mat4 projection_3d    = glm::mat4(1.0f);
     glm::mat4 view             = glm::mat4(1.0f);
     glm::mat4 projection       = glm::mat4(1.0f);
-
     projection_3d = glm::perspective(glm::radians(45.0f), (float)WIDTH / (float)HEIGHT, 0.1f, 100.0f);
-        
     
     /*Rendering function*/
     auto render = [&](){
@@ -181,7 +169,7 @@ int main()
         unsigned int number_light_cells_Loc = glGetUniformLocation(shader_program_3d, "number_light_cells");
 
 
-        /*draw background lines*/
+        /*draw background lines or cube*/
         glUseProgram(grid_shader_program);
         if(controller.style_3d == 1){ /*draws cube when in 3d*/
             glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(controller.camera.get_camera_view()));
@@ -223,6 +211,7 @@ int main()
             glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
         }
 
+        /* updates uniforms */
         glUniform3fv(color_loc, 1, controller.cell_color);
         glUniform1f(intensity_loc, controller.sun_intensity);
         glUniform1i(coloring_loc, controller.coloring_style);
@@ -231,9 +220,10 @@ int main()
         glUniform1f(light_cells_intensity_Loc, controller.light_cells_intensity);
         glUniform1i(number_light_cells_Loc, controller.number_of_light_cells);
 
-
         glBindVertexArray(VAOs[1]);
-        glDrawArraysInstanced(GL_TRIANGLES, 0, 30, number_of_active_cells); /*actually draws*/
+        
+        /*Draws cell instances*/
+        glDrawArraysInstanced(GL_TRIANGLES, 0, 30, number_of_active_cells); 
         
         /*draws Imgui interface*/
         controller.renderImgui(window.m_glfwWindow, (*window.io));

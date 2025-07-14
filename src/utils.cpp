@@ -6,6 +6,14 @@
 #include <sstream>
 #include "utils.h"
 
+/** Returns 1d coordinates from 3d coordinates
+ * @param i x coordinate
+ * @param j y coordinate
+ * @param k z coordiante
+ * @param N number of rows
+ * @param M number of columns
+ * @param D number of planes
+ */
 int worldIdx(int i, int j, int k, const int N, const int M, const int D){
     k = (k + D) % D;
     i = (i + N) % N;
@@ -33,19 +41,28 @@ void Controller::add_n_random_glider(int n){
         int i = (random_point % (rows * cols)) / cols;
         int j = (random_point % (rows * cols)) % cols;
 
-        next_state[random_point] = 1;
-        next_state[worldIdx(i+1, j, k, rows, cols, planes)] = 1;
-        next_state[worldIdx(i+1, j, k+1, rows, cols, planes)] = 1;
-        next_state[worldIdx(i, j, k+1, rows, cols, planes)] = 1;
+        if(style_3d){
+            next_state[random_point] = 1;
+            next_state[worldIdx(i+1, j, k, rows, cols, planes)] = 1;
+            next_state[worldIdx(i+1, j, k+1, rows, cols, planes)] = 1;
+            next_state[worldIdx(i, j, k+1, rows, cols, planes)] = 1;
 
-        next_state[worldIdx(i-1, j-1, k, rows, cols, planes)] = 1;
-        next_state[worldIdx(i-1, j-1, k+1, rows, cols, planes)] = 1;
+            next_state[worldIdx(i-1, j-1, k, rows, cols, planes)] = 1;
+            next_state[worldIdx(i-1, j-1, k+1, rows, cols, planes)] = 1;
 
-        next_state[worldIdx(i+2, j-1, k, rows, cols, planes)] = 1;
-        next_state[worldIdx(i+2, j-1, k+1, rows, cols, planes)] = 1;
+            next_state[worldIdx(i+2, j-1, k, rows, cols, planes)] = 1;
+            next_state[worldIdx(i+2, j-1, k+1, rows, cols, planes)] = 1;
 
-        next_state[worldIdx(i, j-1, k+2, rows, cols, planes)] = 1;
-        next_state[worldIdx(i+1, j-1, k+2, rows, cols, planes)] = 1;
+            next_state[worldIdx(i, j-1, k+2, rows, cols, planes)] = 1;
+            next_state[worldIdx(i+1, j-1, k+2, rows, cols, planes)] = 1;
+        }
+        else{
+            next_state[worldIdx(i, j, 0, rows, cols, planes)] = 1;
+            next_state[worldIdx(i+1, j+1, 0, rows, cols, planes)] = 1;
+            next_state[worldIdx(i+2, j+1, 0, rows, cols, planes)] = 1;
+            next_state[worldIdx(i+2, j, 0, rows, cols, planes)] = 1;
+            next_state[worldIdx(i+2, j-1, 0, rows, cols, planes)] = 1;
+        }
 
     }
 }
@@ -54,12 +71,6 @@ void Controller::kill_world(){
     std::fill(next_state.begin(), next_state.end(), 0);
 }
 
-/* SHADERS FUNCTIONS */
-
-/** Loads a shader from a path.
- * @param path path to shader
- * @return shader identifier
-*/
 unsigned int Controller::load_shader(std::string path, bool shader_type){
     /*reading shader*/
     std::ifstream shaderInput;
@@ -90,12 +101,6 @@ unsigned int Controller::load_shader(std::string path, bool shader_type){
     return shader;
 }
 
-/** Creates shader program from shaders, if said so, it deletes the used shaders afterwards.
- * @param vertex vertex shader already loaded
- * @param fragment fragment shader already loaded
- * @param flag if true deletes the shaders after using them.
- * @return shader program identifier
- */
 unsigned int Controller::create_shader_program(unsigned int vertex, unsigned int fragment){
     int success;
     char infoLog[512];
@@ -113,16 +118,6 @@ unsigned int Controller::create_shader_program(unsigned int vertex, unsigned int
     return program;
 }
 
-/* BUFFER FUNCTIONS */
-
-/** Gets the number of active cells on the result array and updates the buffer
- * @param positions buffer to be updated with the positions of active cells
- * @param result    array with the result from a Conway step 
- * @param coords    array with coordinates for every cube
- * @param N         amount of rows
- * @param M         amount of columns
- * @return          number of active cells after step
- */
 int Controller::update_with_step(unsigned int &positions, std::vector<int> &result, std::vector<float> coords, int N, int M, int D){
     int number_of_active_cells = 0;
 
@@ -139,23 +134,10 @@ int Controller::update_with_step(unsigned int &positions, std::vector<int> &resu
     glBufferData(GL_ARRAY_BUFFER, sizeof(float)*new_positions.size(), new_positions.data(), GL_DYNAMIC_DRAW);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-    // glEnableVertexAttribArray(2);
-    // glBindBuffer(GL_ARRAY_BUFFER, positions);
-    // glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);	
-    // glVertexAttribDivisor(2, 1); 
-
     return number_of_active_cells;
 
 }
 
-/** Binds and loads a static buffer of floats
- * @param VBOS array of vertex buffer objects
- * @param VAOs array of vertex array objects
- * @param size size of data array in bytes
- * @param data data array 
- * @param index index of the buffer
-*/
 void Controller::bind_load_static_buffer(unsigned int *VBOs, unsigned int *VAOs, int size, float *data, int index){
     glBindVertexArray(VAOs[index]);
     glBindBuffer(GL_ARRAY_BUFFER, VBOs[index]);
@@ -195,11 +177,6 @@ void Controller::bind_load_indices_buffer(unsigned int *VBOs, unsigned int *VAOs
     glBindBuffer(GL_ARRAY_BUFFER, 0); 
 }
 
-/* VERTICES FUNCTIONS */
-
-/** Calculates vertices for the grid
- * @return float vector with vertices, 6 values per vertex
- */
 std::vector<float> Controller::gridLines(){
     std::vector <float> vertices;
     int i = 0;
@@ -219,9 +196,6 @@ std::vector<float> Controller::gridLines(){
     return vertices;
 }
 
-/** Calculates positions for each cube in openGL space [-1, 1]
- * @return float vector with positions, 3 values per position
-*/
 std::vector<float> Controller::grid_points_3d(){
     std::vector<float> vertices;
     for(int k = planes-1; k >= 0; k--){
@@ -235,8 +209,6 @@ std::vector<float> Controller::grid_points_3d(){
     return vertices;
 }
 
-/* LIGHTED CELLS FUNCTIONS*/
-
 void Controller::fill_lighted_cells(std::vector<float> &points){
     std::random_device rd; 
     std::mt19937 gen(rd()); 
@@ -246,7 +218,6 @@ void Controller::fill_lighted_cells(std::vector<float> &points){
         lighted_cells_positions.insert(lighted_cells_positions.end(), {points[random_point*3], points[random_point*3 + 1], points[random_point*3 + 2]});
     }
 }
-
 
 void Controller::update_light_cells(std::vector<float> &points){
     if(number_of_light_cells > internal_number_of_light_cells){
@@ -259,18 +230,14 @@ void Controller::update_light_cells(std::vector<float> &points){
     }
 }
 
-/* IMGUI LOOP */
-
 void Controller::renderImgui(GLFWwindow* window, ImGuiIO &io){
-    //Start the Dear ImGui frame
+
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
     
-    // 2. Show a simple window that we create ourselves. We use a Begin/End pair to create a named window.
+    /*Contents of the window*/
     {
-        static int counter = 0;
-
         ImGui::Begin("Controller");                         
 
         ImGui::SliderInt("Velocity", &current_fps, 0, 60);  
@@ -297,7 +264,7 @@ void Controller::renderImgui(GLFWwindow* window, ImGuiIO &io){
     }
 
 
-    //Rendering
+    /*Actual rendering*/
     ImGui::Render();
     int display_w, display_h;
     glfwGetFramebufferSize(window, &display_w, &display_h);
@@ -332,10 +299,6 @@ void Controller::calculateStepSecuentially(){
     std::copy(temp.begin(), temp.end(), next_state.begin());   
 }
 
-
-
-
-
 void Camera::update(){
     if (keys[0]) phi-=1;
     if (keys[1]) phi+=1;
@@ -353,12 +316,6 @@ void Camera::update(){
 glm::mat4 Camera::get_camera_view(){
     return glm::lookAt(position, focus, glm::vec3(0.0f, 1.0f, 0.0f));
 }
-
-
-
-
-
-
 
 Window::Window(Controller &c){
 
@@ -398,7 +355,6 @@ Window::Window(Controller &c){
     glEnable(GL_DEPTH_TEST);
 }
 
-
 void Window::init_glfw_window(int width, int height, const char *title){
     glfwInit();
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -422,12 +378,6 @@ void Window::init_glfw_window(int width, int height, const char *title){
     }  
 }
 
-    /* GLFW CONFIG FUNCTIONS */
-
-/** Resolves key input when called
- *  Space will change the state of the simulation between pause and running
- *  Up and Down will change the fps of the simulation
- */
 void Window::internal_key_callback(int key, int action){
     if (key == GLFW_KEY_SPACE && action == GLFW_PRESS){
         /*update buffer with possible chanegs*/
@@ -473,9 +423,6 @@ void Window::internal_key_callback(int key, int action){
     }
 }
 
-/** Resolves mouse button input when called
- *  Clicking inside the simulation will change the state of the clicked square
- */
 void Window::internal_mouse_button_callback(int button, int action, int mods)
 {
     if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS && !controller->style_3d){

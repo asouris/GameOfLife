@@ -1,37 +1,31 @@
 #version 330 core
-out vec4 FragColor;
-  
-in vec3 fragPos;
-in vec3 fragNormal;
 
-uniform vec3 uniColor;
-uniform float light_intensity;
-uniform bool coloring;
+out vec4 FragColor;                         /*final frag color*/
 
-const int max_light_cells = 20;
-uniform float light_cells[max_light_cells];
-uniform float light_cells_intensity;
-uniform int number_light_cells;
+in vec3 fragPos;                            
+in vec3 fragNormal;                         /*fragment normal*/
 
-struct DirectionalLight
-{
-    vec3 direction;
-    vec3 ambient;
-    vec3 diffuse;
-    vec3 specular;
-} light;
+uniform vec3 uniColor;                      /*cell color*/
+uniform float light_intensity;              /*directional light intensity*/
+uniform bool coloring;                      /*type of coloring*/
+uniform bool style_3d;                      /*3d or 2d style*/
+
+const int max_light_cells = 20;             /*maximum amount of lighted cells*/
+uniform float light_cells[max_light_cells]; /*array of lights*/
+uniform float light_cells_intensity;        /*lighted cells intensity*/
+uniform int number_light_cells;             /*current number of lighted cells*/
 
 vec3 computeDirectionalLight() {
-    light.direction = vec3(-1, 1, 1);
-    light.ambient = vec3(0.5, 0.5, 0.5);
-    light.diffuse = vec3(1, 1, 1);
+    light_direction = vec3(-1, 1, 1);
+    light_ambient = vec3(0.5, 0.5, 0.5);
+    light_diffuse = vec3(1, 1, 1);
 
     //ambient
-    vec3 ambient = light.ambient * uniColor;
+    vec3 ambient = light_ambient * uniColor;
 
     // diffuse
-    float diff = max(dot(normalize(fragNormal), light.direction), 0.0f);
-    vec3 diffuse = uniColor * light.diffuse * diff;
+    float diff = max(dot(normalize(fragNormal), light_direction), 0.0f);
+    vec3 diffuse = uniColor * light_diffuse * diff;
 
     return ambient+diffuse;
 }
@@ -57,18 +51,23 @@ vec3 computeCellLight(vec3 cell_position){
 void main()
 {   
 
-    if(!coloring){
-        vec3 light_from_cells = vec3(0.0);
-        if(number_light_cells > 0){
-            for(int i = 0; i < number_light_cells; i++){
-                light_from_cells += computeCellLight(vec3(light_cells[i*3], light_cells[i*3 + 1], light_cells[i*3 + 2]));
+    if(style_3d){
+        if(!coloring){
+            vec3 light_from_cells = vec3(0.0);
+            if(number_light_cells > 0){
+                for(int i = 0; i < number_light_cells; i++){
+                    light_from_cells += computeCellLight(vec3(light_cells[i*3], light_cells[i*3 + 1], light_cells[i*3 + 2]));
+                }
             }
-        }
 
-        FragColor = vec4(computeDirectionalLight() * light_intensity + light_from_cells, 1.0f);
+            FragColor = vec4(computeDirectionalLight() * light_intensity + light_from_cells, 1.0f);
+        }
+        else{
+            FragColor = vec4(fragNormal, 1.0f);
+        }
     }
     else{
-        FragColor = vec4(fragNormal, 1.0f);
+        FragColor = vec4(uniColor, 1.0f);
     }
     
 }

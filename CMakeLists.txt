@@ -24,11 +24,6 @@ add_library(
 )
 target_include_directories(opencl_conway PUBLIC ${PROJECT_SOURCE_DIR}/include)
 
-
-# add_executable(opencl src/opencl/opencl_conway.cpp)
-# target_include_directories(opencl PUBLIC ${PROJECT_SOURCE_DIR}/include)
-# target_link_libraries(opencl OpenCL)
-
 #copy kernels to bin
 file(COPY src/opencl/CalcStep.cl DESTINATION ${PROJECT_SOURCE_DIR}/bin/kernel/)
 file(COPY src/opencl/CalcStep2D.cl DESTINATION ${PROJECT_SOURCE_DIR}/bin/kernel/)
@@ -57,8 +52,6 @@ add_library(imgui
 
 )
 target_include_directories(imgui PUBLIC ${imgui_external_SOURCE_DIR})
-
-
 
 add_library(
         utils STATIC
