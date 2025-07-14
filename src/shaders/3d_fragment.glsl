@@ -16,9 +16,9 @@ uniform float light_cells_intensity;        /*lighted cells intensity*/
 uniform int number_light_cells;             /*current number of lighted cells*/
 
 vec3 computeDirectionalLight() {
-    light_direction = vec3(-1, 1, 1);
-    light_ambient = vec3(0.5, 0.5, 0.5);
-    light_diffuse = vec3(1, 1, 1);
+    vec3 light_direction = vec3(-1, 1, 1);
+    vec3 light_ambient = vec3(0.5, 0.5, 0.5);
+    vec3 light_diffuse = vec3(1, 1, 1);
 
     //ambient
     vec3 ambient = light_ambient * uniColor;
