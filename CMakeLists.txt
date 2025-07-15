@@ -1,3 +1,4 @@
+
 cmake_minimum_required(VERSION 3.22)
 include(FetchContent)
 
@@ -7,15 +8,17 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin/)
 
+FetchContent_Declare(glfw URL https://github.com/glfw/glfw/archive/refs/tags/3.4.tar.gz)
+FetchContent_Declare(glm URL https://github.com/g-truc/glm/archive/refs/tags/1.0.1.tar.gz)
+
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 
-set(SOURCES src/conway.cpp src/glad.c)
-add_executable(conway ${SOURCES})
+FetchContent_MakeAvailable(glfw)
+FetchContent_MakeAvailable(glm)
 
 find_package(OpenGL REQUIRED)
-add_subdirectory(include/glfw-3.4)
 include_directories(${OPENGL_INCLUDE_DIRS})
 
 add_library(
@@ -53,14 +56,23 @@ add_library(imgui
 )
 target_include_directories(imgui PUBLIC ${imgui_external_SOURCE_DIR})
 
+
+add_library(
+	glad STATIC 
+	${PROJECT_SOURCE_DIR}/src/glad/glad.c 
+)
+target_include_directories(glad PUBLIC ${PROJECT_SOURCE_DIR}/src/glad/include)
+
 add_library(
         utils STATIC
         src/utils.cpp
 )
 target_include_directories(utils PUBLIC ${PROJECT_SOURCE_DIR}/include)
-target_link_libraries(utils imgui)
+target_link_libraries(utils glad imgui glfw opencl_conway OpenCL glm)
+
+#set(SOURCES src/conway.cpp src/glad.c)
+add_executable(conway src/conway.cpp)
 
 target_include_directories(conway PUBLIC ${PROJECT_SOURCE_DIR}/include)
-target_link_libraries(conway ${OPENGL_LIBRARIES} utils glfw OpenCL opencl_conway)
-
+target_link_libraries(conway ${OPENGL_LIBRARIES} utils)
 
